@@ -1,35 +1,41 @@
 <!DOCTYPE html>
-<html lang="en" data-scheme="dark">
+<html lang="en" data-scheme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-<meta name="theme-color" content="#1B1327">
+<meta name="description" content="A private, ranked list of everything you've done. Runs in your browser and saves on your device.">
+<meta name="theme-color" content="#FBF3E0">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Life list">
 <title>Life list</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link id="baseFonts" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&display=swap" rel="stylesheet">
+<link id="baseFonts" href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link id="themeFonts" rel="stylesheet">
 <style>
+  /* Defaults match the Sunbaked theme so the first paint looks like the usual
+     pick; applyTheme() overwrites every one of these from THEMES. */
   :root{
-    --ink:#1B1327; --ink-2:#241931; --ink-3:#2E2140;
-    --bone:#F3EDE4; --mute:#9184A3;
-    --gold:#F0B429; --rose:#E86A92; --on-gold:#1B1327;
-    --line:rgba(240,180,41,.16); --grid:rgba(243,237,228,.07);
-    --serif:"Newsreader",Georgia,"Times New Roman",serif;
-    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
-    --entry:17px; --pad:16px;
-    --anim-num:numPop .9s ease-out;
-    --anim-row:rowFade .35s ease-out;
+    --ink:#FBF3E0; --ink-2:#F4E7CB; --ink-3:#E4D3B0;
+    --bone:#231F1A; --mute:#6B6459;
+    --gold:#D63A1C; --rose:#0B7A6E; --on-gold:#FBF3E0;
+    --line:rgba(214,58,28,.26); --grid:rgba(35,31,26,.12);
+    --serif:"Work Sans",system-ui,sans-serif;
+    --mono:"Syne",system-ui,sans-serif;
+    --entry:17px; --pad:16px; --col:720px;
+    --anim-num:numStamp .6s cubic-bezier(.2,1.3,.4,1);
+    --anim-row:rowOffset .4s ease-out;
   }
-  html{color-scheme:dark}
-  html[data-scheme="light"]{color-scheme:light}
+  html{color-scheme:light;background:var(--ink)}
+  html[data-scheme="dark"]{color-scheme:dark}
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
-  body{margin:0;background:var(--ink);color:var(--bone);font-family:var(--serif);display:flex;flex-direction:column;overscroll-behavior-y:none;transition:background .25s,color .25s}
+  body{margin:0 auto;max-width:var(--col);background:var(--ink);color:var(--bone);font-family:var(--serif);display:flex;flex-direction:column;overscroll-behavior-y:none;transition:background .25s,color .25s}
   body.dragging{cursor:grabbing;user-select:none;-webkit-user-select:none;touch-action:none;overscroll-behavior:none}
   body.dragging main{touch-action:none}
   body.dragging .milestone{visibility:hidden}
@@ -48,6 +54,7 @@
   .icon-btn{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:var(--mute);font-family:var(--mono);font-size:14px}
   .icon-btn:hover,.icon-btn:focus-visible{color:var(--bone);background:var(--ink-3)}
   .icon-btn[aria-pressed="true"]{color:var(--gold)}
+  .icon-btn[hidden]{display:none}
 
   .searchbar{display:none;padding:12px var(--pad) 0;gap:10px;align-items:center}
   .searchbar.on{display:flex}
@@ -73,6 +80,7 @@
   .override button{margin-left:auto;flex:0 0 auto;color:var(--gold);font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:5px 10px;border-radius:999px;background:var(--line)}
   main{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px}
   .list{position:relative;padding:2px 0 8px}
+  .list:has(> .note)::before{display:none}
   .list::before{content:"";position:absolute;left:43px;top:6px;bottom:6px;width:1px;background:linear-gradient(180deg,transparent,var(--line) 6%,var(--line) 94%,transparent)}
   .row{display:grid;grid-template-columns:44px 1fr 34px;align-items:start;padding:9px var(--pad) 9px 0;position:relative;transition:box-shadow .2s ease,background-color .2s ease}
   .row:not(.editing):hover{background:rgba(127,127,127,.06)}
@@ -276,6 +284,32 @@
   .tieritem span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tierempty{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);opacity:.5;padding:6px 0}
 
+  /* ---------- wide screens: overlays stay in the column ---------- */
+  .sheet,.panel{margin:0 auto;max-width:var(--col)}
+  @media (min-width:760px){
+    .sheet{bottom:16px;border:1px solid var(--ink-3);border-radius:20px;padding-bottom:12px}
+    .panel{border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3)}
+    body{border-left:1px solid var(--ink-3);border-right:1px solid var(--ink-3)}
+  }
+
+  /* ---------- RedNut themes: chunky ink borders, print-flat surfaces ---------- */
+  html[data-theme^="sunbaked"] .count{font-weight:700;font-size:30px;letter-spacing:-.02em}
+  html[data-theme^="sunbaked"] .eyebrow{font-weight:600;color:var(--bone)}
+  html[data-theme^="sunbaked"] .chip{border-width:1.5px}
+  html[data-theme^="sunbaked"] .chip[aria-pressed="true"]{background:var(--bone);color:var(--ink)}
+  html[data-theme^="sunbaked"] .btn.primary,
+  html[data-theme^="sunbaked"] .send.ready{border:2px solid var(--bone)}
+  html[data-theme^="sunbaked"] .btn.primary{box-shadow:2px 2px 0 var(--bone)}
+  html[data-theme^="sunbaked"] .row.editing,
+  html[data-theme^="sunbaked"] .duelcard,
+  html[data-theme^="sunbaked"] .yearcard{border:2px solid var(--bone);box-shadow:3px 3px 0 var(--rose)}
+  html[data-theme^="sunbaked"] .duelcard.fresh{border-color:var(--gold);box-shadow:3px 3px 0 var(--gold)}
+  html[data-theme^="sunbaked"] .row.lifted{border:2px solid var(--bone);box-shadow:4px 4px 0 var(--gold)}
+  html[data-theme^="sunbaked"] .sheet{border-top:2px solid var(--bone)}
+  html[data-theme^="sunbaked"] .milestone b{border:1.5px solid var(--bone)}
+  html[data-theme^="sunbaked"] .toast{border:2px solid var(--bone);box-shadow:3px 3px 0 var(--gold)}
+  @media (min-width:760px){ html[data-theme^="sunbaked"] .sheet{border:2px solid var(--bone)} }
+
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -329,17 +363,18 @@
   "use strict";
 
   const KEY = "lifelist:v1";
+  const embedded = (()=>{ try{ return window.self!==window.top; }catch(e){ return true; } })();
+  /* first-run theme: the portfolio's own light/dark choice if we're hosted
+     there (same origin, "rn-theme"), otherwise the system setting */
+  const prefersDark = () => {
+    try{ const rn=localStorage.getItem("rn-theme"); if(rn==="dark"||rn==="light") return rn==="dark"; }catch(e){}
+    return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  };
 
-  /* Inside Claude this uses the artifact's own storage. If the file is saved and
-     opened directly, that API doesn't exist, so it falls back to this browser's
-     storage — and to memory as a last resort, with a warning. */
+  /* Everything lives in this browser's localStorage — no account, no server.
+     If storage is blocked (some private modes, locked-down iframes) it falls
+     back to memory, with a warning to back up before closing. */
   const store = (function(){
-    try{
-      if(window.storage && typeof window.storage.get==="function"){
-        return { mode:"claude", label:"Your Claude account, private to you",
-          get:k=>window.storage.get(k), set:(k,v)=>window.storage.set(k,v), del:k=>window.storage.delete(k) };
-      }
-    }catch(e){}
     let ls=null;
     try{
       const probe="__lifelist_probe";
@@ -442,6 +477,17 @@
 
   /* c = [ink, ink2, ink3, bone, mute, accent, accent2, onAccent] */
   const THEMES = [
+    /* RedNut design system, v1.0 "Sunbaked" — riso inks on paper */
+    {id:"sunbaked",name:"Sunbaked",scheme:"light",c:["#FBF3E0","#F4E7CB","#E4D3B0","#231F1A","#6B6459","#D63A1C","#0B7A6E","#FBF3E0"],
+     serif:"'Work Sans',system-ui,sans-serif",mono:"'Syne',system-ui,sans-serif",
+     g:"family=Syne:wght@500;600;700&family=Work+Sans:wght@400;500;600",
+     num:"numStamp .6s cubic-bezier(.2,1.3,.4,1)",row:"rowOffset .4s ease-out"},
+
+    {id:"sunbaked-dark",name:"Sunbaked night",scheme:"dark",c:["#1C1712","#26201A","#4A3F33","#F2E9D8","#B8AC95","#FF6A4D","#2FD4BF","#1C1712"],
+     serif:"'Work Sans',system-ui,sans-serif",mono:"'Syne',system-ui,sans-serif",
+     g:"family=Syne:wght@500;600;700&family=Work+Sans:wght@400;500;600",
+     num:"numStamp .6s cubic-bezier(.2,1.3,.4,1)",row:"rowOffset .4s ease-out"},
+
     {id:"inkwell",name:"Inkwell",scheme:"dark",c:["#1B1327","#241931","#2E2140","#F3EDE4","#9184A3","#F0B429","#E86A92","#1B1327"],
      serif:"'Newsreader',Georgia,serif",mono:"'IBM Plex Mono',ui-monospace,monospace",
      g:"family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=IBM+Plex+Mono:wght@400;500;600",
@@ -560,7 +606,7 @@
 
   let state = {
     entries:[], nextId:1,
-    sort:"rank", showTags:true, showDates:true, theme:"inkwell", haptics:true, seeded:false, purged:false, duels:true, tint:true,
+    sort:"rank", showTags:true, showDates:true, theme:prefersDark()?"sunbaked-dark":"sunbaked", haptics:true, seeded:false, purged:false, duels:true, tint:true,
     filter:null, year:null, today:false, query:"",
     editingId:null, numEditing:null, pendingTags:[], loaded:false
   };
@@ -600,6 +646,7 @@
     s.setProperty("--anim-num", t.num);
     s.setProperty("--anim-row", t.row);
     r.setAttribute("data-scheme", t.scheme);
+    r.setAttribute("data-theme", t.id);
     const meta = document.querySelector('meta[name="theme-color"]');
     if(meta) meta.setAttribute("content", t.c[0]);
     const link = $("themeFonts");
@@ -634,9 +681,9 @@
         state.purged  = !!d.purged;
         state.duels   = d.duels !== false;
         state.tint    = d.tint !== false;
-        let th = d.theme || "inkwell";
+        let th = d.theme || state.theme;
         if(th==="dark") th="inkwell"; if(th==="light") th="paper";
-        state.theme = THEMES.some(t=>t.id===th) ? th : "inkwell";
+        if(THEMES.some(t=>t.id===th)) state.theme = th;
       }
     }catch(e){}
     state.entries.forEach(e=>{ if(!("on" in e)) e.on=null; if(!("tm" in e)) e.tm=null; });
@@ -650,23 +697,31 @@
       state.purged=true; state.seeded=true; save();
     }
     state.loaded=true; applyTheme();
+    // ask the browser not to evict the list under storage pressure
+    try{ if(store.mode==="local" && navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
     if(store.mode==="memory") setTimeout(()=>toast("Nothing can be saved here — back up before closing",null),900);
     const l=$("loading"); if(l) l.remove();
     render();
   }
+  async function writeNow(){
+    clearTimeout(saveTimer); saveTimer=null;
+    try{
+      await store.set(KEY, JSON.stringify({
+        entries:state.entries, nextId:state.nextId, sort:state.sort,
+        showTags:state.showTags, showDates:state.showDates, theme:state.theme,
+        haptics:state.haptics, seeded:state.seeded, purged:state.purged,
+        duels:state.duels, tint:state.tint
+      }));
+    }catch(e){ toast("Couldn’t save — try again", null); }
+  }
   function save(){
     clearTimeout(saveTimer);
-    saveTimer=setTimeout(async()=>{
-      try{
-        await store.set(KEY, JSON.stringify({
-          entries:state.entries, nextId:state.nextId, sort:state.sort,
-          showTags:state.showTags, showDates:state.showDates, theme:state.theme,
-          haptics:state.haptics, seeded:state.seeded, purged:state.purged,
-          duels:state.duels, tint:state.tint
-        }));
-      }catch(e){ toast("Couldn’t save — try again", null); }
-    },220);
+    saveTimer=setTimeout(writeNow,220);
   }
+  // don't lose a change made just before the tab closes or the app is swiped away
+  const flush = () => { if(saveTimer) writeNow(); };
+  window.addEventListener("pagehide",flush);
+  document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flush(); });
 
   /* ---------- helpers ---------- */
   const cleanTag = t => t.trim().toLowerCase().replace(/^#/,"").replace(/\s+/g," ").slice(0,20);
@@ -1344,11 +1399,9 @@
     s.append(el("h4",null,"Where this saves"));
     const info=el("div");
     info.style.cssText="padding:0 12px 12px;font-size:14px;line-height:1.5;color:var(--mute)";
-    info.textContent = store.mode==="claude"
-      ? "Your Claude account, private to you. Only published artifacts save — drafts don't."
-      : store.mode==="local"
-        ? "This browser on this device. Clearing site data will erase it."
-        : "Nowhere. This copy can't reach any storage, so download a backup before you close it.";
+    info.textContent = store.mode==="local"
+      ? "Only in this browser, on this device — nothing is sent anywhere. Clearing site data erases it, so download a backup now and then."
+      : "Nowhere. This copy can't reach any storage, so download a backup before you close it.";
     s.append(info);
 
     s.append(el("h4",null,"Careful"));
@@ -1362,7 +1415,7 @@
 
   function openThemes(){
     openSheet(s=>{
-      s.append(el("h4",null,"22 themes — tap to try, it saves as you go"));
+      s.append(el("h4",null,THEMES.length+" themes — tap to try, it saves as you go"));
       const grid=el("div","themes");
       THEMES.forEach(t=>{
         const card=el("button","tcard");
@@ -1448,14 +1501,20 @@
   function openInstall(){
     const para = txt => { const d=el("div"); d.style.cssText="padding:0 12px 8px;font-size:15px;line-height:1.55;color:var(--mute)"; d.textContent=txt; return d; };
     openSheet(s=>{
-      s.append(el("h4",null,"First, get a link"));
-      s.append(para("This lives inside Claude, so it needs its own web address before a phone can save it. Open the artifact menu in Claude and choose Share or Publish, then copy the link."));
+      if(embedded){
+        s.append(el("h4",null,"First, open it on its own"));
+        s.append(para("You're seeing this inside another page. Open Life list by itself, then follow the steps below from there. Your list comes with you — it's the same site."));
+        s.append(item("Open Life list in a new tab","↗",()=>{ window.open(location.href.split("#")[0],"_blank","noopener"); closeSheet(); }));
+      }
       s.append(el("h4",null,"iPhone"));
-      s.append(para("Open that link in Safari — not in the Claude app. Tap the share button in the bottom bar, scroll down, tap Add to Home Screen, then Add. It gets an icon and opens full screen with no browser bars."));
+      s.append(para("Open this page in Safari. Tap the share button, scroll down, tap Add to Home Screen, then Add. It gets its own icon and opens full screen."));
+      s.append(para("iPhones give home screen apps their own storage, separate from Safari. If you already have a list in Safari, download a backup there first and restore it in the new app."));
       s.append(el("h4",null,"Android"));
-      s.append(para("Open the link in Chrome, tap the three-dot menu, then Add to Home screen and Install."));
-      s.append(el("h4",null,"Not quite a widget"));
-      s.append(para("This becomes an app icon, not a live tile — phones only let their own apps draw widgets. It also loads over the network, so it needs a connection to open. Download a JSON backup now and then so your list never lives in one place only."));
+      s.append(para("Open this page in Chrome, tap the three-dot menu, then Install app (or Add to Home screen)."));
+      s.append(el("h4",null,"Computer"));
+      s.append(para("In Chrome or Edge, click the install icon at the right of the address bar. It opens in its own window."));
+      s.append(el("h4",null,"Good to know"));
+      s.append(para("Once it's opened once it works offline. It's an app icon rather than a live widget, and your list lives only on the device you add things on — download a JSON backup now and then so it never lives in one place only."));
       s.append(item("Close",null,closeSheet));
     });
   }
@@ -2052,6 +2111,11 @@
       if(e.shiftKey) redo(); else undo();
     }
   });
+
+  // offline support once installed; skipped when opened as a file
+  if("serviceWorker" in navigator && location.protocol.startsWith("http")){
+    window.addEventListener("load",()=>{ navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+  }
 
   load();
 })();
