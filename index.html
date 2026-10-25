@@ -10,6 +10,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Life list">
 <title>Life list</title>
+<!-- AppReporter: automatic crash reports, no feedback button. In the portfolio, Netlify stamps data-version at build. -->
+<script src="app-reporter.js" data-app="lifelist" data-endpoint="https://app-reporter.app-reporter-relay.workers.dev"
+        data-version="0-dev" data-button="false"></script>
+<script>
+  // The list is private: quoted text in an error message could be one of its lines, so it never leaves the device.
+  window.AppReporter && AppReporter.init({ beforeSend: function (r) {
+    var q = /"[^"]*"|'[^']*'|“[^”]*”|‘[^’]*’/g;
+    r.message = r.message.replace(q, '"…"'); r.stack = r.stack.replace(q, '"…"');
+    return r;
+  } });
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">

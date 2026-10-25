@@ -2,7 +2,8 @@
 
 A private, ranked list of everything you've done. Write a line, then place it
 by picking the better of two until it lands at its rank. The list is yours
-alone: it saves in your browser, on your device, and nothing is sent anywhere.
+alone: it saves in your browser, on your device, and is never sent anywhere.
+If the app crashes it sends a short technical report (see "Crash reports").
 
 It's one HTML file with no build step and no dependencies. It installs to a
 phone's home screen and works offline once it has been opened.
@@ -40,6 +41,15 @@ you add things on. So:
 If storage is blocked (some private modes), it runs from memory and warns you
 to back up before closing.
 
+## Crash reports
+
+Crashes go to AppReporter (`app-reporter.js`, a copy of the browser kit from
+`D:\AppReporter`), which files them in Discord. A report holds the error, the
+stack, the page, the browser and which buttons were pressed just before. It
+never holds your list: quoted text is removed from error messages before
+sending, and the kit never records text on screen. There's no feedback button
+yet.
+
 ## Run it
 
 Open `index.html` directly, or serve the folder to get offline support and
@@ -58,6 +68,7 @@ Then open <http://localhost:8000>.
 | `index.html` | The whole app: markup, styles, script |
 | `manifest.webmanifest` | Name, colours and icons for installing |
 | `sw.js` | Offline cache, network first so updates show straight away |
+| `app-reporter.js` | Crash reporting (AppReporter browser kit) |
 | `icons/` | App icons (SVG, plus PNGs for Android and iOS) |
 
 ## In the portfolio
