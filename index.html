@@ -288,7 +288,7 @@
   #duel[hidden]{display:none}
   #duel:not([hidden]){display:flex;flex-direction:column;gap:0;padding:calc(env(safe-area-inset-top) + 18px) var(--pad) calc(env(safe-area-inset-bottom) + 18px)}
   .duelhead{flex:0 0 auto;text-align:center;margin-bottom:4px}
-  .duelhead h2{font-family:var(--mono);font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--mute);font-weight:400;margin:0 0 10px}
+  .duelhead h2{font-size:26px;line-height:1.2;color:var(--bone);font-weight:600;margin:0 0 14px}
   .duelbar{height:3px;background:var(--ink-3);border-radius:99px;overflow:hidden;margin-bottom:8px}
   .duelbar i{display:block;height:100%;background:var(--gold);border-radius:99px;transition:width .3s ease}
   .duelstep{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
@@ -296,12 +296,10 @@
   .duelcard{width:100%;text-align:left;border:1px solid var(--ink-3);background:var(--ink-2);border-radius:16px;
     padding:20px 18px;display:flex;flex-direction:column;gap:12px;transition:transform .12s ease,border-color .15s ease;position:relative}
   .duelcard:active{transform:scale(.98)}
-  .duelcard:hover{border-color:var(--gold)}
+  .duelcard:hover{border-color:var(--bone)}
   .duelcard .who{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--mute)}
   .duelcard .what{font-size:20px;line-height:1.35}
   .duelcard .tg{display:flex;flex-wrap:wrap;gap:8px}
-  .duelcard.fresh{border-color:var(--line)}
-  .duelcard.fresh .who{color:var(--gold)}
   .duelvs{text-align:center;font-family:var(--mono);font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--mute);opacity:.6}
   .duelfoot{flex:0 0 auto;display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 
@@ -333,9 +331,8 @@
   html[data-theme^="sunbaked"] .send.ready{border:2px solid var(--bone)}
   html[data-theme^="sunbaked"] .btn.primary{box-shadow:2px 2px 0 var(--bone)}
   html[data-theme^="sunbaked"] .row.editing,
-  html[data-theme^="sunbaked"] .duelcard,
   html[data-theme^="sunbaked"] .yearcard{border:2px solid var(--bone);box-shadow:3px 3px 0 var(--rose)}
-  html[data-theme^="sunbaked"] .duelcard.fresh{border-color:var(--gold);box-shadow:3px 3px 0 var(--gold)}
+  html[data-theme^="sunbaked"] .duelcard{border:2px solid var(--bone);box-shadow:3px 3px 0 var(--bone)}
   html[data-theme^="sunbaked"] .row.lifted{border:2px solid var(--bone);box-shadow:4px 4px 0 var(--gold)}
   html[data-theme^="sunbaked"] .sheet{border-top:2px solid var(--bone)}
   html[data-theme^="sunbaked"] .milestone b{border:1.5px solid var(--bone)}
@@ -2174,14 +2171,14 @@
     p.append(head);
 
     const card=(e,fresh,label)=>{
-      const b=el("button","duelcard"+(fresh?" fresh":""));
+      // both cards look the same, so neither one reads as the "right" answer
+      const b=el("button","duelcard");
       b.append(el("div","who",label));
       b.append(el("div","what",e.text||"(untitled)"));
       if((e.tags||[]).length){
         const tg=el("div","tg");
         e.tags.forEach(t=>{
-          const s=el("span","tag"); const d=el("span","dot"); d.style.background=tagColor(t);
-          s.append(d, el("span",null,t)); tg.append(s);
+          tg.append(el("span","tag",t));
         });
         b.append(tg);
       }
