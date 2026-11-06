@@ -13,8 +13,12 @@ phone's home screen and works offline once it has been opened.
 - **Rank by comparison.** New entries are placed with a binary search: roughly
   seven "which is better?" picks for a list of 100. You can also drag a line,
   or tap its number and type a new rank.
-- **Tags.** End a line with ` - food, travel` or use `#food`. Filter by tag,
-  year or "on this day".
+- **Several lists.** Tap the list name at the top to switch lists, start a
+  new one, rename it or delete it. Each list has its own entries and ranking;
+  the theme and settings are shared.
+- **Tags.** End a line with ` - food, travel`, use `#food`, or tap **# Tag**
+  above the box to pick tags or make new ones. The line under the box shows
+  which tags the next entry will get. Filter by tag, year or "on this day".
 - **Patterns.** Tag mix, momentum year on year, a daily heatmap, pairs of tags
   that go together, and a year-by-year breakdown.
 - **Tiers.** Cuts your ranking into S–F on a normal curve, and can save it as
@@ -28,11 +32,20 @@ phone's home screen and works offline once it has been opened.
 
 ## Your data
 
-Everything is kept in `localStorage` under the key `lifelist:v1`, on the device
-you add things on. So:
+Everything is kept in `localStorage`, on the device you add things on:
 
-- Each browser and device keeps its own list. Move a list with **Download
-  backup (JSON)** → **Restore from backup**.
+| Key | Holds |
+| --- | --- |
+| `lifelist:lists` | The names of your lists and which one is open |
+| `lifelist:prefs` | Theme and settings, shared by every list |
+| `lifelist:v1` | Your first list (where older versions kept the only list) |
+| `lifelist:list:<id>` | Each list after the first |
+
+So:
+
+- Each browser and device keeps its own lists. Move a list with **Download
+  backup (JSON)** → **Restore from backup** (a backup holds the list that's
+  open).
 - On iPhone, a home screen app gets storage separate from Safari. Restore a
   backup there if you started in Safari.
 - Clearing site data erases the list. The app asks the browser for persistent

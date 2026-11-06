@@ -147,6 +147,12 @@
   .compose textarea::placeholder{color:var(--mute)}
   .send{width:40px;height:40px;flex:0 0 auto;border-radius:50%;background:var(--ink-3);color:var(--mute);display:grid;place-items:center;font-size:17px;transition:.16s}
   .send.ready{background:var(--gold);color:var(--on-gold)}
+  .listbtn{display:inline-flex;align-items:center;gap:7px;max-width:62vw;padding:2px 0;border-radius:4px}
+  .listbtn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .listbtn i{font-style:normal;font-size:9px;color:var(--gold);letter-spacing:0}
+  .listbtn:hover span{text-decoration:underline;text-underline-offset:3px}
+  .sheet .namefield{display:flex;gap:8px;padding:0 12px 12px}
+  .sheet .namefield input{flex:1;min-width:0;font-family:var(--serif);font-size:16px;padding:10px 12px;background:var(--ink);border-radius:10px}
   .chip.addtag{color:var(--gold);border-style:dashed;border-color:var(--line)}
   .willtag{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
   .willtag:empty{display:none}
@@ -344,7 +350,7 @@
 <header>
   <div class="titlebar">
     <div>
-      <div class="eyebrow">Life list</div>
+      <button class="eyebrow listbtn" id="listBtn" aria-label="Switch list" aria-haspopup="dialog"><span id="listName">Life list</span><i aria-hidden="true">▾</i></button>
       <div class="count" id="count">—</div>
     </div>
     <div class="tools">
@@ -691,29 +697,57 @@
   function tagWash(n,a){ return "hsl("+tagHue(n)+" "+baseSat+"% "+tagLight+"% / "+a+")"; }
 
   /* ---------- storage ---------- */
+  /* Several lists. The first one stays under KEY ("lifelist:v1"), exactly
+     where older versions kept the only list, so nothing has to move. The
+     index names the lists and which is open; prefs (theme, toggles) are
+     shared by every list. Older versions kept prefs inside KEY, so that is
+     where they are read from until the prefs key exists. */
+  const INDEX_KEY = "lifelist:lists", PREFS_KEY = "lifelist:prefs";
+  let lists = { lists:[{id:"main",name:"Life list",key:KEY}], current:"main" };
+  const curList = () => lists.lists.find(l=>l.id===lists.current) || lists.lists[0];
+  const listName = () => curList().name;
+  async function readJSON(key){
+    try{ const r=await store.get(key); return r && r.value ? JSON.parse(r.value) : null; }catch(e){ return null; }
+  }
+  function applyPrefs(d){
+    if(!d) return;
+    state.showTags = d.showTags !== false;
+    state.showDates= d.showDates !== false;
+    state.haptics  = d.haptics !== false;
+    state.seeded   = !!d.seeded;
+    state.purged   = !!d.purged;
+    state.duels    = d.duels !== false;
+    state.tint     = d.tint !== false;
+    let th = d.theme || state.theme;
+    if(th==="dark") th="inkwell"; if(th==="light") th="paper";
+    if(THEMES.some(t=>t.id===th)) state.theme = th;
+  }
+  async function readList(list){
+    const d = await readJSON(list.key) || {};
+    const entries = Array.isArray(d.entries) ? d.entries : [];
+    entries.forEach(e=>{ if(!("on" in e)) e.on=null; if(!("tm" in e)) e.tm=null; });
+    let so=d.sort||"rank";
+    if(so==="added") so="rank"; if(so==="newest") so="rankdesc";
+    return { entries, nextId:d.nextId || entries.length+1, sort:["rank","rankdesc","tag","az"].includes(so) ? so : "rank" };
+  }
+  async function openList(list){
+    const d = await readList(list);
+    state.entries=d.entries; state.nextId=d.nextId; state.sort=d.sort;
+  }
+  const writeIndex = () => store.set(INDEX_KEY, JSON.stringify(lists)).catch(()=>{});
+
   async function load(){
-    try{
-      const res = await store.get(KEY);
-      if(res && res.value){
-        const d = JSON.parse(res.value);
-        state.entries = Array.isArray(d.entries)? d.entries : [];
-        state.nextId  = d.nextId || state.entries.length+1;
-        let so=d.sort||"rank";
-        if(so==="added") so="rank"; if(so==="newest") so="rankdesc";
-        state.sort    = ["rank","rankdesc","tag","az"].includes(so) ? so : "rank";
-        state.showTags= d.showTags !== false;
-        state.showDates= d.showDates !== false;
-        state.haptics = d.haptics !== false;
-        state.seeded  = !!d.seeded;
-        state.purged  = !!d.purged;
-        state.duels   = d.duels !== false;
-        state.tint    = d.tint !== false;
-        let th = d.theme || state.theme;
-        if(th==="dark") th="inkwell"; if(th==="light") th="paper";
-        if(THEMES.some(t=>t.id===th)) state.theme = th;
-      }
-    }catch(e){}
-    state.entries.forEach(e=>{ if(!("on" in e)) e.on=null; if(!("tm" in e)) e.tm=null; });
+    const idx = await readJSON(INDEX_KEY);
+    if(idx && Array.isArray(idx.lists) && idx.lists.length){
+      lists = { lists: idx.lists.filter(l=>l && l.id && l.key), current: idx.current };
+      applyPrefs(await readJSON(PREFS_KEY) || await readJSON(KEY));
+    }else{
+      // first run of this version: the one existing list (if any) becomes list 1
+      applyPrefs(await readJSON(KEY));
+      await writeIndex();
+    }
+    if(!lists.lists.some(l=>l.id===lists.current)) lists.current = lists.lists[0].id;
+    await openList(curList());
     if(!state.purged){
       const n=state.entries.filter(e=>e.sample).length;
       if(n){
@@ -730,15 +764,21 @@
     const l=$("loading"); if(l) l.remove();
     render();
   }
+  const prefsBlob = () => ({
+    showTags:state.showTags, showDates:state.showDates, theme:state.theme,
+    haptics:state.haptics, seeded:state.seeded, purged:state.purged,
+    duels:state.duels, tint:state.tint
+  });
   async function writeNow(){
     clearTimeout(saveTimer); saveTimer=null;
+    const list=curList();
+    const blob={ entries:state.entries, nextId:state.nextId, sort:state.sort };
+    // list 1 keeps the old all-in-one shape, so an older cached copy of the
+    // app opened offline still finds its settings (and won't re-run the purge)
+    if(list.key===KEY) Object.assign(blob, prefsBlob());
     try{
-      await store.set(KEY, JSON.stringify({
-        entries:state.entries, nextId:state.nextId, sort:state.sort,
-        showTags:state.showTags, showDates:state.showDates, theme:state.theme,
-        haptics:state.haptics, seeded:state.seeded, purged:state.purged,
-        duels:state.duels, tint:state.tint
-      }));
+      await store.set(list.key, JSON.stringify(blob));
+      await store.set(PREFS_KEY, JSON.stringify(prefsBlob()));
     }catch(e){ toast("Couldn’t save — try again", null); }
   }
   function save(){
@@ -749,6 +789,92 @@
   const flush = () => { if(saveTimer) writeNow(); };
   window.addEventListener("pagehide",flush);
   document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden") flush(); });
+
+  /* ---------- lists ---------- */
+  // everything that belongs to the list on screen, dropped when another opens
+  function resetListScope(){
+    cancelPress(); drag=null;
+    if(duel){ duel=null; $("duel").hidden=true; }
+    undoStack=[]; redoStack=[];
+    state.editingId=null; state.numEditing=null; state.pendingTags=[]; state.dropFilterTag=false;
+    state.filter=null; state.year=null; state.today=false; state.query="";
+    const si=$("search"); if(si) si.value="";
+    $("searchbar").classList.remove("on"); $("searchBtn").setAttribute("aria-pressed","false");
+    lastNums={}; justAdded=null; justDropped=null; jumpTo=null; statTag=null; suppressFlash=true;
+  }
+  async function switchList(id){
+    if(id===lists.current) return;
+    await writeNow();                       // the old list's last edit goes to the old list
+    lists.current=id; await writeIndex();
+    resetListScope();
+    await openList(curList());
+    $("main").scrollTop=0; render();
+  }
+  async function createList(name){
+    const id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    lists.lists.push({id, name, key:"lifelist:list:"+id});
+    await writeIndex();
+    await switchList(id);
+    toast("New list ready", null);
+  }
+  async function renameList(id,name){
+    const l=lists.lists.find(x=>x.id===id); if(!l) return;
+    l.name=name; await writeIndex(); render();
+  }
+  async function deleteList(id){
+    if(lists.lists.length<2) return;
+    const l=lists.lists.find(x=>x.id===id); if(!l) return;
+    if(!confirm("Delete the list “"+l.name+"” and everything in it? Back it up first — this can’t be undone.")) return;
+    if(id===lists.current){
+      clearTimeout(saveTimer); saveTimer=null;   // nothing left to save for it
+      lists.current=lists.lists.find(x=>x.id!==id).id;
+      resetListScope();
+      await openList(curList());
+    }
+    lists.lists=lists.lists.filter(x=>x.id!==id);
+    await writeIndex();
+    try{ await store.del(l.key); }catch(e){}
+    $("main").scrollTop=0; render();
+    toast("List deleted", null);
+  }
+  const cleanName = s => String(s||"").replace(/\s+/g," ").trim().slice(0,40);
+  function askName(title, initial, okLabel, done){
+    openSheet(s=>{
+      s.append(el("h4",null,title));
+      const row=el("div","namefield");
+      const inp=document.createElement("input");
+      inp.value=initial||""; inp.maxLength=40; inp.placeholder="e.g. Places I’ve been"; inp.autocomplete="off";
+      inp.setAttribute("aria-label","List name");
+      const ok=el("button","btn primary",okLabel);
+      const go=()=>{ const n=cleanName(inp.value); if(!n){ inp.focus(); return; } closeSheet(); done(n); };
+      ok.onclick=go;
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); go(); } });
+      row.append(inp, ok); s.append(row);
+      s.append(item("Cancel",null,closeSheet));
+      requestAnimationFrame(()=>{ inp.focus(); inp.select(); });
+    });
+  }
+  async function openLists(){
+    await writeNow();                          // so the counts below are current
+    const counts=await Promise.all(lists.lists.map(async l=>
+      l.id===lists.current ? state.entries.filter(e=>e.text).length : (await readList(l)).entries.filter(e=>e.text).length));
+    openSheet(s=>{
+      s.append(el("h4",null,"Your lists"));
+      lists.lists.forEach((l,i)=>{
+        const on=l.id===lists.current;
+        const b=item(l.name, counts[i]+(counts[i]===1?" thing":" things")+(on?"  ✓":""), ()=>{ closeSheet(); switchList(l.id); });
+        b.setAttribute("data-report","list");     // crash reports name the button, never the list
+        if(on) b.setAttribute("aria-current","true");
+        s.append(b);
+      });
+      s.append(item("+ New list",null,()=>askName("Name your new list","","Create",createList)));
+      s.append(el("h4",null,"This list"));
+      s.append(item("Rename it",null,()=>askName("Rename this list",listName(),"Save",n=>renameList(lists.current,n))));
+      if(lists.lists.length>1) s.append(item("Delete it", null, ()=>{ closeSheet(); deleteList(lists.current); }, "danger"));
+      s.append(el("div","para","Each list has its own entries and ranking. Theme and settings are shared."));
+    });
+  }
+  $("listBtn").onclick=openLists;
 
   /* ---------- helpers ---------- */
   const cleanTag = t => t.trim().toLowerCase().replace(/^#/,"").replace(/\s+/g," ").slice(0,20);
@@ -863,7 +989,7 @@
   }
 
   /* ---------- render ---------- */
-  function render(){ if(!state.loaded) return; renderCount(); renderControls(); renderOverride(); renderQuick(); renderList(); renderUndoBtn(); }
+  function render(){ if(!state.loaded) return; $("listName").textContent=listName(); renderCount(); renderControls(); renderOverride(); renderQuick(); renderList(); renderUndoBtn(); }
 
   function renderOverride(){
     const box=$("override"); box.textContent="";
@@ -1440,7 +1566,7 @@
   function rowsForExport(){ return visible().map(r=>({n:r.master+1,e:r.e})); }
   function asText(){ return rowsForExport().map(({n,e})=>n+". "+e.text+((e.tags||[]).length?" - "+e.tags.join(", "):"")).join("\n"); }
   function asMarkdown(){
-    const head="# Life list\n\n"+state.entries.filter(e=>e.text).length+" things"+(state.filter?" · filtered by “"+state.filter+"”":"")+"\n\n";
+    const head="# "+listName()+"\n\n"+state.entries.filter(e=>e.text).length+" things"+(state.filter?" · filtered by “"+state.filter+"”":"")+"\n\n";
     return head+rowsForExport().map(({n,e})=>{
       const bits=[];
       if(e.on) bits.push(new Date(e.on+"T12:00:00").toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"})+(e.tm?", "+e.tm:""));
@@ -1454,7 +1580,7 @@
     rowsForExport().forEach(({n,e})=>lines.push([n,esc(e.text),esc((e.tags||[]).join("; ")),esc(e.on||""),esc(e.tm||""),esc(iso(new Date(e.at)))].join(",")));
     return lines.join("\n");
   }
-  const asJSON = () => JSON.stringify({app:"life-list",version:1,exported:new Date().toISOString(),entries:state.entries,nextId:state.nextId},null,2);
+  const asJSON = () => JSON.stringify({app:"life-list",version:1,list:listName(),exported:new Date().toISOString(),entries:state.entries,nextId:state.nextId},null,2);
   async function copy(text,label){
     try{ await navigator.clipboard.writeText(text); toast(label,null); }catch(e){ showTextDump(text); }
   }
@@ -1467,6 +1593,8 @@
     }catch(e){ copy(text,"Download blocked — copied instead"); }
   }
   const stamp = () => iso(new Date());
+  // "Places I've been" -> "places-i-ve-been"; falls back to the app name
+  const fileStem = () => listName().toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,40) || "life-list";
 
   /* ---------- sheets ---------- */
   function openSheet(build){
@@ -1489,6 +1617,9 @@
   }
 
   $("menuBtn").onclick=()=>openSheet(s=>{
+    s.append(el("h4",null,"Lists"));
+    s.append(item("Switch, add or rename", lists.lists.length===1?"1 list":lists.lists.length+" lists", openLists));
+
     s.append(el("h4",null,"Look"));
     s.append(item("Theme", theme().name, openThemes));
     s.append(item("Show tags", state.showTags?"On":"Off", ()=>{ state.showTags=!state.showTags; save(); render(); closeSheet(); }));
@@ -1507,8 +1638,8 @@
     s.append(item("Share this view", n+" lines", shareView));
     s.append(item("Copy as plain text", null, ()=>{ copy(asText(),"Copied "+n+" lines"); closeSheet(); }));
     s.append(item("Copy as Markdown", null, ()=>{ copy(asMarkdown(),"Markdown copied"); closeSheet(); }));
-    s.append(item("Download CSV", null, ()=>{ download("life-list-"+stamp()+".csv",asCSV(),"text/csv"); closeSheet(); }));
-    s.append(item("Download backup (JSON)","everything",()=>{ download("life-list-backup-"+stamp()+".json",asJSON(),"application/json"); closeSheet(); }));
+    s.append(item("Download CSV", null, ()=>{ download(fileStem()+"-"+stamp()+".csv",asCSV(),"text/csv"); closeSheet(); }));
+    s.append(item("Download backup (JSON)","everything",()=>{ download(fileStem()+"-backup-"+stamp()+".json",asJSON(),"application/json"); closeSheet(); }));
     s.append(item("Copy backup (JSON)",null,()=>{ copy(asJSON(),"Backup copied — paste it somewhere safe"); closeSheet(); }));
 
     s.append(el("h4",null,"Bring it in"));
@@ -1530,12 +1661,13 @@
     s.append(info);
 
     s.append(el("h4",null,"Careful"));
-    s.append(item("Delete everything", state.entries.length+" entries", async()=>{
-      if(!confirm("Delete all "+state.entries.length+" entries? Back up first — this can’t be undone.")) return;
+    s.append(item("Clear this list", state.entries.length+" entries", ()=>{
+      if(!confirm("Delete all "+state.entries.length+" entries in “"+listName()+"”? Back up first — this can’t be undone.")) return;
       state.entries=[]; state.nextId=1; state.filter=null; state.year=null; state.today=false;
-      try{ await store.del(KEY); }catch(e){}
+      undoStack=[]; redoStack=[];
       save(); render(); closeSheet();
     },"danger"));
+    if(lists.lists.length>1) s.append(item("Delete this list", null, ()=>{ closeSheet(); deleteList(lists.current); }, "danger"));
   });
 
   function openThemes(){
@@ -1569,7 +1701,7 @@
   }
 
   async function shareView(){
-    const text=asMarkdown(), title="Life list"+(state.filter?" · "+state.filter:"");
+    const text=asMarkdown(), title=listName()+(state.filter?" · "+state.filter:"");
     closeSheet();
     if(navigator.share){
       try{ await navigator.share({title,text}); return; }catch(e){ if(e&&e.name==="AbortError") return; }
@@ -2114,7 +2246,7 @@
       return {t,items};
     });
   }
-  const tiersAsText = () => "Life list · tiers\n\n"+tierBands().map(b=>
+  const tiersAsText = () => listName()+" · tiers\n\n"+tierBands().map(b=>
       b.t.k+" ("+b.items.length+")\n"+(b.items.length? b.items.map(x=>"  "+x.n+". "+x.e.text).join("\n") : "  —")
     ).join("\n\n");
 
@@ -2184,7 +2316,7 @@
       c.fillStyle=t.c[0]; c.fillRect(0,0,W,H);
       c.fillStyle=t.c[3];
       c.font="600 40px ui-sans-serif, system-ui, -apple-system, sans-serif";
-      c.fillText("Life list", pad, pad+40);
+      c.fillText(listName(), pad, pad+40);
       c.fillStyle=t.c[4];
       c.font="400 19px ui-monospace, SFMono-Regular, Menlo, monospace";
       c.fillText(state.entries.filter(e=>e.text).length+" things, cut on a normal curve", pad, pad+72);
@@ -2214,7 +2346,7 @@
 
       const finish=url=>{
         const a=document.createElement("a");
-        a.href=url; a.download="life-list-tiers-"+stamp()+".png";
+        a.href=url; a.download=fileStem()+"-tiers-"+stamp()+".png";
         document.body.append(a); a.click(); a.remove();
         toast("Tier image saved",null); closeSheet();
       };
