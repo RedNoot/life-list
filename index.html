@@ -147,6 +147,21 @@
   .compose textarea::placeholder{color:var(--mute)}
   .send{width:40px;height:40px;flex:0 0 auto;border-radius:50%;background:var(--ink-3);color:var(--mute);display:grid;place-items:center;font-size:17px;transition:.16s}
   .send.ready{background:var(--gold);color:var(--on-gold)}
+  .chip.addtag{color:var(--gold);border-style:dashed;border-color:var(--line)}
+  .willtag{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+  .willtag:empty{display:none}
+  .willtag .wt{display:inline-flex;align-items:center;gap:4px;padding:3px 3px 3px 9px;border-radius:999px;background:var(--ink-3);color:var(--bone)}
+  .willtag .wt.typed{background:none;border:1px dashed var(--line);padding-right:9px}
+  .willtag .wt .dot{width:5px;height:5px;border-radius:50%}
+  .willtag .wt button{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:var(--mute);font-size:13px;line-height:1}
+  .willtag .wt button:hover{color:var(--bone)}
+  .willtag .tip{text-transform:none;letter-spacing:.02em;font-size:11.5px}
+  .newtag{display:flex;gap:8px;padding:0 12px 12px}
+  .newtag input{flex:1;min-width:0;font-family:var(--mono);font-size:16px;padding:9px 12px;background:var(--ink);border-radius:10px}
+  .tagpick{display:flex;flex-wrap:wrap;gap:6px;padding:0 12px 8px}
+  .sheet .para{padding:0 12px 10px;font-size:14px;line-height:1.5;color:var(--mute)}
+  .edit-tagchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .edit-tagchips .chip{padding:4px 9px;font-size:10px}
   .hint{font-family:var(--mono);font-size:9.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--mute);opacity:.6;margin-top:7px}
 
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 108px);background:var(--ink-3);border:1px solid var(--grid);border-radius:999px;padding:9px 10px 9px 16px;display:flex;align-items:center;gap:12px;z-index:80;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;box-shadow:0 12px 30px rgba(0,0,0,.3)}
@@ -360,7 +375,8 @@
     <textarea id="input" rows="1" placeholder="Add something you did…" autocomplete="off"></textarea>
     <button class="send" id="send" aria-label="Add to list">↑</button>
   </div>
-  <div class="hint">Hold a line to drag it · tap its rank to move it there · “ - food” tags</div>
+  <div class="willtag" id="willtag" aria-live="polite"></div>
+  <div class="hint">Hold a line to drag it · tap its rank to move it there</div>
 </footer>
 
 <div class="toast" id="toast" hidden><span id="toastMsg"></span><button id="toastAction">Undo</button></div>
@@ -619,7 +635,7 @@
     entries:[], nextId:1,
     sort:"rank", showTags:true, showDates:true, theme:prefersDark()?"sunbaked-dark":"sunbaked", haptics:true, seeded:false, purged:false, duels:true, tint:true,
     filter:null, year:null, today:false, query:"",
-    editingId:null, numEditing:null, pendingTags:[], loaded:false
+    editingId:null, numEditing:null, pendingTags:[], dropFilterTag:false, loaded:false
   };
   let lastNums={}, saveTimer=null, toastTimer=null;
   let drag=null, suppressFlash=false, jumpTo=null, justAdded=null, baseHue=44, baseSat=86, tagLight=62;
@@ -811,9 +827,9 @@
   /* ---------- mutations ---------- */
   function addEntry(raw){
     const p=parseEntry(raw); if(!p.text) return;
-    const tags=dedupe([...p.tags,...state.pendingTags,...(state.filter?[state.filter]:[])]);
+    const tags=dedupe([...p.tags,...state.pendingTags,...(state.filter&&!state.dropFilterTag?[state.filter]:[])]);
     const e=Object.assign({id:state.nextId++,text:p.text,tags}, stampNow());
-    state.pendingTags=[]; buzz(8);
+    state.pendingTags=[]; state.dropFilterTag=false; buzz(8);
     const dup=findSimilar(e.text);
     if(dup) confirmDuplicate(e,dup); else placeEntry(e);
   }
@@ -913,21 +929,99 @@
         const b=el("button","chip"); const d=el("span","dot"); d.style.background=tagColor(t);
         b.append(d, el("span",null,t), el("span","n",String(n)));
         b.setAttribute("aria-pressed",String(state.filter===t));
-        b.onclick=()=>{ state.filter=state.filter===t?null:t; render(); };
+        b.onclick=()=>{ state.filter=state.filter===t?null:t; state.dropFilterTag=false; render(); };
         box.append(b);
       });
     }
   }
 
+  const togglePending = t => {
+    state.pendingTags = state.pendingTags.includes(t) ? state.pendingTags.filter(x=>x!==t) : [...state.pendingTags,t];
+  };
   function renderQuick(){
     const box=$("quick"); box.textContent="";
+    const add=el("button","chip addtag","# Tag");
+    add.setAttribute("aria-label","Choose tags for the next entry");
+    add.onclick=openTagPicker;
+    box.append(add);
     allTags().slice(0,10).forEach(([t])=>{
       const b=el("button","chip"); const d=el("span","dot"); d.style.background=tagColor(t);
       b.append(d, el("span",null,t));
-      const on=state.pendingTags.includes(t);
-      b.setAttribute("aria-pressed",String(on));
-      b.onclick=()=>{ state.pendingTags=on?state.pendingTags.filter(x=>x!==t):[...state.pendingTags,t]; renderQuick(); $("input").focus(); };
+      b.setAttribute("aria-pressed",String(state.pendingTags.includes(t)));
+      b.onclick=()=>{ togglePending(t); renderComposerTags(); $("input").focus(); };
       box.append(b);
+    });
+    renderWillTag();
+  }
+  const renderComposerTags = () => renderQuick();
+
+  /* every tag the next entry will get, and where it comes from — so the
+     " - tag" syntax shows itself working as you type */
+  function composerTags(){
+    const typed=parseEntry($("input").value).tags;
+    const out=typed.map(t=>({t,from:"typed"}));
+    state.pendingTags.forEach(t=>{ if(!typed.includes(t)) out.push({t,from:"picked"}); });
+    if(state.filter && !state.dropFilterTag && !out.some(x=>x.t===state.filter)) out.push({t:state.filter,from:"filter"});
+    return out;
+  }
+  function renderWillTag(){
+    const box=$("willtag"); box.textContent="";
+    const text=$("input").value.trim();
+    const tags=composerTags();
+    if(!tags.length){
+      if(text) box.append(el("span","tip","No tags yet. End with “ - food” to tag it, or tap # Tag."));
+      return;
+    }
+    box.append(el("span",null,"Tags"));
+    tags.forEach(({t,from})=>{
+      const c=el("span","wt"+(from==="typed"?" typed":""));
+      const d=el("span","dot"); d.style.background=tagColor(t);
+      c.append(d, el("span",null, from==="filter" ? t+" · filter" : t));
+      if(from!=="typed"){
+        const x=el("button",null,"×");
+        x.setAttribute("aria-label","Remove this tag");
+        x.onclick=()=>{
+          if(from==="filter") state.dropFilterTag=true; else togglePending(t);
+          renderComposerTags(); $("input").focus();
+        };
+        c.append(x);
+      }
+      box.append(c);
+    });
+  }
+
+  function openTagPicker(){
+    openSheet(s=>{
+      s.append(el("h4",null,"Tag what you’re adding"));
+      const row=el("div","newtag");
+      const inp=document.createElement("input");
+      inp.placeholder="New tag, e.g. food"; inp.maxLength=60; inp.autocomplete="off"; inp.enterKeyHint="done";
+      inp.setAttribute("aria-label","New tag");
+      const addBtn=el("button","btn primary","Add");
+      const addIt=()=>{
+        inp.value.split(",").map(cleanTag).filter(Boolean).forEach(t=>{ if(!state.pendingTags.includes(t)) state.pendingTags.push(t); });
+        inp.value=""; renderComposerTags(); draw(); inp.focus();
+      };
+      addBtn.onclick=addIt;
+      inp.addEventListener("keydown",e=>{ if(e.key==="Enter"){ e.preventDefault(); addIt(); } });
+      row.append(inp, addBtn); s.append(row);
+
+      const grid=el("div","tagpick");
+      const draw=()=>{
+        grid.textContent="";
+        const names=dedupe([...state.pendingTags, ...allTags().map(([t])=>t)]);
+        names.forEach(t=>{
+          const b=el("button","chip"); const d=el("span","dot"); d.style.background=tagColor(t);
+          b.append(d, el("span",null,t));
+          b.setAttribute("aria-pressed",String(state.pendingTags.includes(t)));
+          b.onclick=()=>{ togglePending(t); renderComposerTags(); draw(); };
+          grid.append(b);
+        });
+      };
+      draw(); s.append(grid);
+      s.append(el("div","para","Or type them: end a line with “ - food, travel”, or put #food anywhere in it."));
+      s.append(item("Done",null,()=>{ closeSheet(); $("input").focus(); }));
+      if(!allTags().length) requestAnimationFrame(()=>inp.focus());
     });
   }
 
@@ -1037,6 +1131,26 @@
 
     const ta=el("textarea","edit-text"); ta.value=entry.text; ta.rows=1; ta.placeholder="What did you do?";
     const tagIn=el("input","edit-tags"); tagIn.value=(entry.tags||[]).join(", "); tagIn.placeholder="tags, comma separated";
+    // tap a tag you already use instead of typing it
+    const tagChips=el("div","edit-tagchips");
+    const typedTags=()=>tagIn.value.split(",").map(cleanTag).filter(Boolean);
+    const drawTagChips=()=>{
+      tagChips.textContent="";
+      const cur=typedTags();
+      dedupe([...cur, ...allTags().slice(0,12).map(([t])=>t)]).forEach(t=>{
+        const b=el("button","chip"); const d=el("span","dot"); d.style.background=tagColor(t);
+        b.append(d, el("span",null,t));
+        b.setAttribute("aria-pressed",String(cur.includes(t)));
+        b.onclick=()=>{
+          const now=typedTags();
+          tagIn.value=(now.includes(t)?now.filter(x=>x!==t):[...now,t]).join(", ");
+          drawTagChips();
+        };
+        tagChips.append(b);
+      });
+    };
+    tagIn.addEventListener("change",drawTagChips);
+    drawTagChips();
     const dateWrap=el("div","edit-date");
     const dateIn=document.createElement("input"); dateIn.type="date"; dateIn.value=entry.on||"";
     const timeIn=document.createElement("input"); timeIn.type="time"; timeIn.value=entry.tm||"";
@@ -1095,7 +1209,7 @@
     };
     const del=el("button","btn danger","Delete"); del.onclick=()=>removeEntry(entry.id);
     actions.append(done,chain,rerank,cancel,del);
-    body.append(ta,tagIn,dateWrap,actions); row.append(body);
+    body.append(ta,tagIn,tagChips,dateWrap,actions); row.append(body);
     requestAnimationFrame(()=>{ grow(); ta.focus(); ta.setSelectionRange(ta.value.length,ta.value.length); scrollTo(row); });
     return row;
   }
@@ -1295,13 +1409,13 @@
   /* ---------- composer ---------- */
   const input=$("input"), send=$("send");
   const growInput=()=>{ input.style.height="auto"; input.style.height=Math.min(input.scrollHeight,120)+"px"; };
-  input.addEventListener("input",()=>{ growInput(); send.classList.toggle("ready",!!input.value.trim()); });
+  input.addEventListener("input",()=>{ growInput(); send.classList.toggle("ready",!!input.value.trim()); renderWillTag(); });
   input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); submit(); }});
   send.onclick=submit;
   function submit(){
     if(!input.value.trim()) return;
     addEntry(input.value);
-    input.value=""; growInput(); send.classList.remove("ready");
+    input.value=""; growInput(); send.classList.remove("ready"); renderWillTag();
     if(rankView()) requestAnimationFrame(()=>{ $("main").scrollTop=$("main").scrollHeight; });
   }
 
